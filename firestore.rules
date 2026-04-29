@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper functions ──────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ─── Cities (public read, admin write) ────────────────────────────────
+    match /cities/{cityId} {
+      allow read: if true;
+      allow write: if false; // managed via Admin SDK / Console
+
+      // Routes: public read
+      match /routes/{routeId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // Stops: public read
+      match /stops/{stopId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // Timetables: public read
+      match /timetables/{routeId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    // ─── Users: own profile only ──────────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ─── Trips: own trips only ────────────────────────────────────────────
+    match /trips/{tripId} {
+      allow read, write: if isSignedIn() &&
+        resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Crowd Reports: signed-in users can create ────────────────────────
+    match /crowd_reports/{reportId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // ─── Incident Reports: signed-in users can create ─────────────────────
+    match /incident_reports/{reportId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if false;
+    }
+  }
+}

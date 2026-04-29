@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "live_buses": {
+      ".read": true,
+      "$cityId": {
+        ".read": true,
+        "$busId": {
+          ".write": "auth !== null",
+          ".validate": "newData.hasChildren(['lat', 'lng', 'routeId', 'lastUpdated'])"
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
