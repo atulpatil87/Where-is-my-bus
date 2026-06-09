@@ -43,6 +43,9 @@ dependencies:
   # Location / Maps
   geolocator: ^12.0.0
 
+  # Bluetooth LE — peer-to-peer location sharing mesh (BitChat-style)
+  bluetooth_low_energy: ^6.1.0
+
   # Utils
   dartz: ^0.10.1
   equatable: ^2.0.5

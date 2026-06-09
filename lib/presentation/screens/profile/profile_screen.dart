@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:busindia/core/theme/app_colors.dart';
 import 'package:busindia/core/theme/app_spacing.dart';
 import 'package:busindia/core/theme/app_text_styles.dart';
+import '../../providers/bluetooth_location_provider.dart';
+import '../../widgets/bluetooth_location_banner.dart';
+import '../bluetooth_peers/bluetooth_peers_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mesh = ref.watch(bluetoothMeshProvider);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor, // light grey usually, handled by theme
       body: CustomScrollView(
@@ -135,6 +140,73 @@ class ProfileScreen extends StatelessWidget {
                   _buildSettingsTile(context, "♿", "Accessibility", trailing: "Standard"),
                   _buildSettingsTile(context, "📴", "Offline Data", trailing: "Pune timetable · 2.4 MB"),
                 ]),
+
+                // Bluetooth Location Mesh
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                        child: Text(
+                          "BLUETOOTH LOCATION MESH",
+                          style: AppTextStyles.caption.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const BluetoothLocationBanner(),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BluetoothPeersScreen(),
+                          ),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusMedium),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.people_alt_outlined,
+                                color: mesh.isActive
+                                    ? AppColors.primaryOrange
+                                    : AppColors.textSecondary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  mesh.isActive
+                                      ? 'View ${mesh.peers.length} nearby peer${mesh.peers.length == 1 ? '' : 's'}'
+                                      : 'View Bluetooth peers',
+                                  style: AppTextStyles.body.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios,
+                                  size: 12, color: AppColors.textSecondary),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
 
                 // Settings Group 3
                 _buildSettingsGroup(context, "Account", [
