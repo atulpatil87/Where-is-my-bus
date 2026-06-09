@@ -5,6 +5,7 @@ import 'package:busindia/core/theme/app_text_styles.dart';
 import 'package:busindia/presentation/widgets/bus_marker_card.dart';
 import 'package:busindia/presentation/widgets/bus_type_chip.dart';
 import 'package:busindia/presentation/widgets/crowd_indicator.dart';
+import 'package:busindia/presentation/screens/tower_tracking/tower_tracking_screen.dart';
 
 class LiveMapScreen extends StatefulWidget {
   const LiveMapScreen({super.key});
@@ -178,13 +179,54 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
           bottom: 150,
           right: AppSpacing.md,
           child: FloatingActionButton.extended(
-            onPressed: () {},
+            onPressed: () => _showShareOptions(context),
             backgroundColor: AppColors.primaryOrange,
             icon: const Icon(Icons.directions_bus, color: Colors.white),
             label: const Text("I'm on a Bus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
+    );
+  }
+
+  void _showShareOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: AppSpacing.md),
+              Text("Share your bus", style: AppTextStyles.subHead.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: AppSpacing.sm),
+              ListTile(
+                leading: const Icon(Icons.cell_tower, color: AppColors.primaryOrange),
+                title: const Text("Track via cell tower"),
+                subtitle: const Text("Works without GPS — saves battery & data"),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TowerTrackingScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.gps_fixed, color: AppColors.accentBlue),
+                title: const Text("Share GPS location"),
+                subtitle: const Text("Most precise — requires GPS on"),
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        );
+      },
     );
   }
 
