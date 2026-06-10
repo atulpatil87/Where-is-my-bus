@@ -41,4 +41,15 @@ class AppConstants {
 
   // Min speed to be considered on a bus (km/h)
   static const double minBusSpeedKmh = 5.0;
+
+  // ─── Cell-tower (no-GPS) tracking ──────────────────────────────────────────
+  // How often a rider re-reads the serving cell tower while sharing.
+  static const int towerShareIntervalSecs = 20;
+  // How often the live tower readout refreshes on the tracking screen.
+  static const int towerReadIntervalSecs = 8;
+  // A fingerprint needs at least this many crowd samples before we trust it for
+  // sharing a bus position (mirrors WiMT's "calibrating" phase).
+  static const int towerMinSamplesToTrust = 3;
+  // Discard fingerprint contributions whose GPS accuracy is worse than this.
+  static const double towerCalibrationMaxAccuracyMeters = 60;
 }

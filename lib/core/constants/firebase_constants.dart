@@ -13,6 +13,8 @@ class FirebaseConstants {
   // Realtime DB paths
   static const String rtdbLiveBuses = 'live_buses';
   static const String rtdbCityMetaSuffix = '_meta';
+  // Crowd-sourced cell-tower → location fingerprints, keyed by cityId/cellKey.
+  static const String rtdbTowerFingerprints = 'tower_fingerprints';
 
   // Storage paths
   static const String storageAvatars = 'avatars';
