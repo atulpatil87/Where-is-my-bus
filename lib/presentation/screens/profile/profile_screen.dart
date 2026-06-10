@@ -4,6 +4,7 @@ import 'package:busindia/core/theme/app_colors.dart';
 import 'package:busindia/core/theme/app_spacing.dart';
 import 'package:busindia/core/theme/app_text_styles.dart';
 import '../../providers/bluetooth_location_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../widgets/bluetooth_location_banner.dart';
 import '../bluetooth_peers/bluetooth_peers_screen.dart';
 
@@ -131,7 +132,14 @@ class ProfileScreen extends ConsumerWidget {
                   _buildSettingsTile(context, "🏙️", "Saved Cities", trailing: "Pune, Mumbai"),
                   _buildSettingsTile(context, "⭐", "Saved Routes", trailing: "3 routes"),
                   _buildSettingsTile(context, "🔔", "Notifications", isSwitch: true, switchValue: true),
-                  _buildSettingsTile(context, "🌙", "Dark Mode", isSwitch: true, switchValue: false),
+                  _buildSettingsTile(
+                    context, 
+                    "🌙", 
+                    "Dark Mode", 
+                    isSwitch: true, 
+                    switchValue: ref.watch(themeProvider) == ThemeMode.dark,
+                    onSwitchChanged: (val) => ref.read(themeProvider.notifier).toggleTheme(val),
+                  ),
                 ]),
 
                 // Settings Group 2
@@ -281,7 +289,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSettingsTile(BuildContext context, String icon, String title, {String? trailing, bool hasArrow = false, bool isSwitch = false, bool switchValue = false}) {
+  Widget _buildSettingsTile(BuildContext context, String icon, String title, {String? trailing, bool hasArrow = false, bool isSwitch = false, bool switchValue = false, ValueChanged<bool>? onSwitchChanged}) {
     return ListTile(
       leading: Text(icon, style: const TextStyle(fontSize: 20)),
       title: Text(title, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500)),
@@ -292,7 +300,7 @@ class ProfileScreen extends ConsumerWidget {
           if (hasArrow) const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
           if (isSwitch) Switch(
             value: switchValue,
-            onChanged: (v) {},
+            onChanged: onSwitchChanged ?? (v) {},
             activeColor: AppColors.primaryOrange,
           ),
         ],
