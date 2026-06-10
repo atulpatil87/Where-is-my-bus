@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: _currentIndex == 0 ? null : AppBar(
         leading: IconButton(icon: const Icon(Icons.menu), onPressed: () {}),
         title: Row(
           mainAxisSize: MainAxisSize.min,

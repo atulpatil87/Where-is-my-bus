@@ -110,6 +110,8 @@ final getEffectiveLocationUseCaseProvider =
   return GetEffectiveLocationUseCase(
     ref.read(locationServiceProvider),
     ref.read(bluetoothLocationRepositoryProvider),
+    ref.read(resolveTowerFixUseCaseProvider),
+    ref.read(cityRepositoryProvider),
   );
 });
 
