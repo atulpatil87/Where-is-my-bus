@@ -41,6 +41,15 @@ class PmpmlRepositoryImpl implements IPmpmlRepository {
   String? get storedMobile => _auth.getStoredMobile();
 
   @override
+  bool get isTokenExpired => _auth.isTokenExpired();
+
+  @override
+  Future<bool> refreshSession() async {
+    final auth = await _auth.refreshAccessToken();
+    return auth != null;
+  }
+
+  @override
   Future<Either<Failure, bool>> sendOtp(String mobile) async {
     try {
       final result = await _auth.sendOtp(mobile);
