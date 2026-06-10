@@ -9,6 +9,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'presentation/providers/providers_setup.dart';
+import 'presentation/providers/theme_provider.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 
 Future<void> main() async {
@@ -83,12 +84,14 @@ class _BusIndiaAppState extends ConsumerState<BusIndiaApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeProvider);
+
     return MaterialApp(
       title: 'BusIndia',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       home: const SplashScreen(),
     );
   }

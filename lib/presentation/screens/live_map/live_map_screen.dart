@@ -119,59 +119,67 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         ),
 
         // ── Bottom sliding panel ─────────────────────────────────────────────
-        DraggableScrollableSheet(
-          initialChildSize: 0.28,
-          minChildSize: 0.12,
-          maxChildSize: 0.65,
-          builder: (ctx, scrollCtrl) =>
-              _buildBottomPanel(ctx, scrollCtrl, filteredBuses, liveBusesAsync),
-        ),
+        // DraggableScrollableSheet(
+        //   initialChildSize: 0.28,
+        //   minChildSize: 0.12,
+        //   maxChildSize: 0.65,
+        //   builder: (ctx, scrollCtrl) =>
+        //       _buildBottomPanel(ctx, scrollCtrl, filteredBuses, liveBusesAsync),
+        // ),
 
-        // ── My Location FAB ──────────────────────────────────────────────────
+        // ── Floating Action Buttons (Bottom Right) ───────────────────────────
         Positioned(
-          bottom: 220,
-          right: AppSpacing.md,
-          child: FloatingActionButton(
-            heroTag: 'my_location_fab',
-            onPressed: _isLocating ? null : () => _goToMyLocation(context),
-            backgroundColor: Theme.of(context).cardColor,
-            elevation: 4,
-            tooltip: 'My Location',
-            child: _isLocating
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.primaryOrange),
-                    ),
-                  )
-                : Icon(
-                    _userLocation != null
-                        ? Icons.my_location
-                        : Icons.location_searching,
-                    color: _userLocation != null
-                        ? AppColors.primaryOrange
-                        : AppColors.textSecondary,
-                  ),
-          ),
-        ),
-
-        // ── Share FAB ────────────────────────────────────────────────────────
-        Positioned(
-          bottom: 160,
-          right: AppSpacing.md,
-          child: FloatingActionButton.extended(
-            heroTag: 'share_bus_fab',
-            onPressed: () => authState.isAuthenticated
-                ? _showShareOptions(context)
-                : _openLogin(context),
-            backgroundColor: AppColors.primaryOrange,
-            icon: const Icon(Icons.directions_bus, color: Colors.white),
-            label: const Text("I'm on a Bus",
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+          bottom: 16,
+          right: 16,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              FloatingActionButton.small(
+                heroTag: 'search_fab',
+                onPressed: () {},
+                backgroundColor: Theme.of(context).cardColor,
+                child: Icon(Icons.search, color: Theme.of(context).iconTheme.color),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton.small(
+                heroTag: 'notif_fab',
+                onPressed: () {},
+                backgroundColor: Theme.of(context).cardColor,
+                child: Icon(Icons.notifications_outlined, color: Theme.of(context).iconTheme.color),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton.extended(
+                heroTag: 'share_bus_fab',
+                onPressed: () => authState.isAuthenticated
+                    ? _showShareOptions(context)
+                    : _openLogin(context),
+                backgroundColor: AppColors.primaryOrange,
+                icon: const Icon(Icons.directions_bus, color: Colors.white),
+                label: const Text("I'm on a Bus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                heroTag: 'my_location_fab',
+                onPressed: _isLocating ? null : () => _goToMyLocation(context),
+                backgroundColor: Theme.of(context).cardColor,
+                elevation: 4,
+                tooltip: 'My Location',
+                child: _isLocating
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryOrange),
+                        ),
+                      )
+                    : Icon(
+                        _userLocation != null ? Icons.my_location : Icons.location_searching,
+                        color: _userLocation != null ? AppColors.primaryOrange : AppColors.textSecondary,
+                      ),
+              ),
+            ],
           ),
         ),
       ],
@@ -184,16 +192,32 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     // Default center for Pune
     const centerLatLng = LatLng(18.5204, 73.8567);
 
+    double currentZoom = 13.0;
+    try {
+      currentZoom = _mapController.camera.zoom;
+    } catch (_) {}
+
+    final double scale = (currentZoom / 13.0).clamp(0.5, 2.0);
+    final double markerWidth = 80 * scale;
+    final double markerHeight = 40 * scale;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return FlutterMap(
       mapController: _mapController,
-      options: const MapOptions(
+      options: MapOptions(
         initialCenter: centerLatLng,
         initialZoom: 13.0,
         maxZoom: 18.0,
+        onPositionChanged: (position, hasGesture) {
+          if (hasGesture) setState(() {});
+        },
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          urlTemplate: isDark
+              ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+              : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.example.busindia',
         ),
         MarkerLayer(
@@ -202,8 +226,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
               .map((bus) {
             return Marker(
               point: LatLng(bus.lat, bus.lng),
-              width: 86,
-              height: 44,
+              width: markerWidth,
+              height: markerHeight,
               child: GestureDetector(
                 onTap: () => _showBusDetails(context, bus),
                 child: _buildMapMarker(

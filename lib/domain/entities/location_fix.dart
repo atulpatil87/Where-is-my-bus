@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum LocationSource { gps, bluetooth }
+enum LocationSource { gps, bluetooth, cellTower }
 
 /// A resolved location reading, tagged with where it came from.
 /// When [source] is [LocationSource.bluetooth], the coordinates were
@@ -24,6 +24,7 @@ class LocationFix extends Equatable {
   });
 
   bool get isFromBluetooth => source == LocationSource.bluetooth;
+  bool get isFromCellTower => source == LocationSource.cellTower;
 
   @override
   List<Object?> get props => [lat, lng, source, timestamp];
