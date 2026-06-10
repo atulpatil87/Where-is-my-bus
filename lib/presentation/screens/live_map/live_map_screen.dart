@@ -128,16 +128,16 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
                 child: Icon(Icons.notifications_outlined, color: Theme.of(context).iconTheme.color),
               ),
               const SizedBox(height: 8),
-              if (authState.isAuthenticated) ...[
-                FloatingActionButton.extended(
-                  heroTag: 'share_bus_fab',
-                  onPressed: () => _showShareOptions(context),
-                  backgroundColor: AppColors.primaryOrange,
-                  icon: const Icon(Icons.directions_bus, color: Colors.white),
-                  label: const Text("I'm on a Bus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 8),
-              ],
+              FloatingActionButton.extended(
+                heroTag: 'share_bus_fab',
+                onPressed: () => authState.isAuthenticated
+                    ? _showShareOptions(context)
+                    : _openLogin(context),
+                backgroundColor: AppColors.primaryOrange,
+                icon: const Icon(Icons.directions_bus, color: Colors.white),
+                label: const Text("I'm on a Bus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
               FloatingActionButton(
                 heroTag: 'my_location_fab',
                 onPressed: _isLocating ? null : () => _goToMyLocation(context),
