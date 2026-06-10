@@ -17,23 +17,51 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
   final List<String> _filters = ["All Routes", "AC Only", "Non-AC", "Electric", "On Time", "Crowded"];
   String _selectedFilter = "All Routes";
 
+  final TransformationController _transformationController = TransformationController();
+  double _currentScale = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _transformationController.addListener(() {
+      final scale = _transformationController.value.getMaxScaleOnAxis();
+      if ((scale - _currentScale).abs() > 0.01) {
+        setState(() {
+          _currentScale = scale;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Map Placeholder
-        Container(
-          color: const Color(0xFFE8F5E9),
-          width: double.infinity,
-          height: double.infinity,
-          child: Stack(
-            children: [
-              // Dummy Bus Markers
-              _buildMapMarker(context, top: 150, left: 50, route: "11", color: AppColors.busOnTime),
-              _buildMapMarker(context, top: 250, left: 180, route: "4A", color: AppColors.busDelayed),
-              _buildMapMarker(context, top: 400, left: 100, route: "155", color: AppColors.busCrowded),
-              _buildMapMarker(context, top: 300, left: 300, route: "24", color: AppColors.busOnTime),
-            ],
+        // Map Placeholder with zoom/pan support
+        InteractiveViewer(
+          transformationController: _transformationController,
+          minScale: 0.5,
+          maxScale: 4.0,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          child: Container(
+            color: const Color(0xFFE8F5E9),
+            width: double.infinity,
+            height: double.infinity,
+            child: Stack(
+              children: [
+                // Dummy Bus Markers
+                _buildMapMarker(context, top: 150, left: 50, route: "11", color: AppColors.busOnTime),
+                _buildMapMarker(context, top: 250, left: 180, route: "4A", color: AppColors.busDelayed),
+                _buildMapMarker(context, top: 400, left: 100, route: "155", color: AppColors.busCrowded),
+                _buildMapMarker(context, top: 300, left: 300, route: "24", color: AppColors.busOnTime),
+              ],
+            ),
           ),
         ),
         
@@ -189,26 +217,39 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
   }
 
   Widget _buildMapMarker(BuildContext context, {required double top, required double left, required String route, required Color color}) {
+    // Scale marker content inversely to zoom so markers stay readable but
+    // also provide a subtle size cue — clamped to avoid extremes.
+    final inverseScale = (1.0 / _currentScale).clamp(0.5, 1.5);
+    final iconSize = 14.0 * inverseScale;
+    final fontSize = 12.0 * inverseScale;
+    final hPad = 8.0 * inverseScale;
+    final vPad = 4.0 * inverseScale;
+    final borderRadius = 8.0 * inverseScale;
+
     return Positioned(
       top: top,
       left: left,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(8),
-          border: Border(left: BorderSide(color: color, width: 4)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.1), offset: const Offset(0, 2), blurRadius: 4)
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.directions_bus, size: 14, color: AppColors.textPrimary),
-            const SizedBox(width: 4),
-            Text(route, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary)),
-          ],
+      child: Transform.scale(
+        scale: inverseScale,
+        alignment: Alignment.topLeft,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border(left: BorderSide(color: color, width: 4)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.1), offset: const Offset(0, 2), blurRadius: 4)
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.directions_bus, size: iconSize, color: AppColors.textPrimary),
+              SizedBox(width: 4 * inverseScale),
+              Text(route, style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: AppColors.textPrimary)),
+            ],
+          ),
         ),
       ),
     );
