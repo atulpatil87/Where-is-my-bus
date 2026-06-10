@@ -73,4 +73,12 @@ class PmpmlApiConstants {
   static const int livePollIntervalSeconds = 15;
   static const String platform = 'android';
   static const String appVersion = '1.0';
+
+  // ── City-wide live view (all buses near you) ───────────────────────────────
+  /// Max number of routes polled per refresh for the "buses near me" map view.
+  /// Bounds the request fan-out so we never hammer the live-data API.
+  static const int maxLiveRoutes = 30;
+
+  /// Radius (metres) used to pick which routes count as "nearby" the user.
+  static const double nearbyRoutesRadiusMeters = 2500;
 }

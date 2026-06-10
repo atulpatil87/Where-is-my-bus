@@ -123,6 +123,17 @@ class PmpmlRepositoryImpl implements IPmpmlRepository {
     }
   }
 
+  @override
+  Future<Either<Failure, List<PmpmlLiveBusModel>>> getLiveBusesForRoutes(
+      List<String> routeIds) async {
+    try {
+      final buses = await _live.getBusesOnRoutes(routeIds);
+      return Right(buses);
+    } on AppException catch (e) {
+      return Left(_mapException(e));
+    }
+  }
+
   // ── Directions ────────────────────────────────────────────────────────────
 
   @override

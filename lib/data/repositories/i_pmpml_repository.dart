@@ -26,6 +26,11 @@ abstract class IPmpmlRepository {
   // ── Live Buses ────────────────────────────────────────────────────────────
   Future<Either<Failure, List<PmpmlLiveBusModel>>> getLiveBuses(String routeId);
 
+  /// Aggregates live buses across multiple routes (used by the "all live buses
+  /// near you" city view that mirrors the official PMPML app).
+  Future<Either<Failure, List<PmpmlLiveBusModel>>> getLiveBusesForRoutes(
+      List<String> routeIds);
+
   // ── Directions ────────────────────────────────────────────────────────────
   Future<Either<Failure, PmpmlDirectionModel>> getBusDirections({
     required double fromLat,
