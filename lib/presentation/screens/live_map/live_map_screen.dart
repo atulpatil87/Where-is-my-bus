@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -37,19 +38,28 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   String? _selectedRouteId;
   LatLng? _userLocation;
   bool _isLocating = false;
+  DateTime? _lastUpdated;
 
   @override
   void initState() {
     super.initState();
-    // Auto-poll every 15s by invalidating the provider
+    // Auto-poll live positions every 15s. When a single route is selected we
+    // refresh just that route; otherwise we refresh the city-wide view.
     _pollTimer = Timer.periodic(
       const Duration(seconds: 15),
       (_) {
-        if (mounted && _selectedRouteId != null) {
+        if (!mounted) return;
+        if (_selectedRouteId != null) {
           ref.invalidate(pmpmlLiveBusesProvider(_selectedRouteId!));
+        } else {
+          ref.read(cityLiveBusesProvider.notifier).refresh();
         }
       },
     );
+    // Try to resolve location on open so the map can centre on nearby buses.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _resolveInitialLocation();
+    });
   }
 
   @override
@@ -63,10 +73,24 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     final authState = ref.watch(pmpmlAuthProvider);
     final routesAsync = ref.watch(pmpmlRoutesProvider);
 
-    // Decide which buses to show
+    // Decide which buses to show. With no route selected we show the
+    // city-wide "live buses near you" view (no login required); selecting a
+    // route narrows it to just that route.
     final liveBusesAsync = _selectedRouteId != null
         ? ref.watch(pmpmlLiveBusesProvider(_selectedRouteId!))
-        : const AsyncData<List<PmpmlLiveBusModel>>([]);
+        : ref.watch(cityLiveBusesProvider);
+
+    // Stamp the "last updated" time whenever fresh data arrives.
+    ref.listen<AsyncValue<List<PmpmlLiveBusModel>>>(
+      _selectedRouteId != null
+          ? pmpmlLiveBusesProvider(_selectedRouteId!)
+          : cityLiveBusesProvider,
+      (prev, next) {
+        if (next.hasValue && mounted) {
+          setState(() => _lastUpdated = DateTime.now());
+        }
+      },
+    );
 
     final buses = liveBusesAsync.valueOrNull ?? [];
     final filteredBuses = _applyFilter(buses);
@@ -80,19 +104,16 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         SafeArea(
           child: Column(
             children: [
-              // Status / Auth banner
-              _buildTopBanner(context, authState, buses.length),
+              // Live status banner (live count + last updated)
+              _buildTopBanner(context, liveBusesAsync, filteredBuses.length),
 
-              // Route selector (only when authenticated)
-              if (authState.isAuthenticated) ...[
-                const SizedBox(height: AppSpacing.xs),
-                _buildRouteSelector(context, routesAsync),
-                const SizedBox(height: AppSpacing.xs),
-              ],
+              // Route selector — optional filter, available to everyone
+              const SizedBox(height: AppSpacing.xs),
+              _buildRouteSelector(context, routesAsync),
+              const SizedBox(height: AppSpacing.xs),
 
               // Filter chips
-              if (authState.isAuthenticated)
-                _buildFilterChips(context),
+              _buildFilterChips(context),
             ],
           ),
         ),
@@ -200,40 +221,25 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           userAgentPackageName: 'com.example.busindia',
         ),
         MarkerLayer(
-          markers: buses.map((bus) {
+          markers: buses
+              .where((b) => b.lat != 0 || b.lng != 0)
+              .map((bus) {
             return Marker(
               point: LatLng(bus.lat, bus.lng),
               width: markerWidth,
               height: markerHeight,
-              child: _buildMapMarker(
-                context,
-                route: bus.routeNumber.isEmpty ? bus.busId : bus.routeNumber,
-                color: _busColor(bus),
+              child: GestureDetector(
+                onTap: () => _showBusDetails(context, bus),
+                child: _buildMapMarker(
+                  context,
+                  route: bus.routeNumber.isEmpty ? bus.busId : bus.routeNumber,
+                  color: _busColor(bus),
+                  heading: bus.heading,
+                ),
               ),
             );
           }).toList(),
         ),
-        // Fallback static markers when no data
-        if (buses.isEmpty)
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: const LatLng(18.5204, 73.8567), // Pune
-                width: markerWidth, height: markerHeight,
-                child: _buildMapMarker(context, route: '11', color: AppColors.busOnTime),
-              ),
-              Marker(
-                point: const LatLng(18.5304, 73.8467), // Near Pune
-                width: markerWidth, height: markerHeight,
-                child: _buildMapMarker(context, route: '4A', color: AppColors.busDelayed),
-              ),
-              Marker(
-                point: const LatLng(18.5104, 73.8667), // Near Pune
-                width: markerWidth, height: markerHeight,
-                child: _buildMapMarker(context, route: '155', color: AppColors.busCrowded),
-              ),
-            ],
-          ),
 
         // ── User location marker ─────────────────────────────────────────────
         if (_userLocation != null)
@@ -254,47 +260,12 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   // ── Top banner ─────────────────────────────────────────────────────────────
 
   Widget _buildTopBanner(
-      BuildContext context, PmpmlAuthState authState, int busCount) {
-    if (!authState.isAuthenticated) {
-      return GestureDetector(
-        onTap: () => _openLogin(context),
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(
-              AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.primaryOrange,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLarge),
-            boxShadow: [
-              BoxShadow(
-                  color: AppColors.primaryOrange.withOpacity(0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4)),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.lock_outline, color: Colors.white, size: 18),
-              const SizedBox(width: AppSpacing.sm),
-              const Expanded(
-                child: Text(
-                  'Tap to sign in and see live buses',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.white),
-            ],
-          ),
-        ),
-      );
-    }
+    BuildContext context,
+    AsyncValue<List<PmpmlLiveBusModel>> liveBusesAsync,
+    int busCount,
+  ) {
+    final isLoading = liveBusesAsync.isLoading;
 
-    // Authenticated — show live bus count banner
     return Container(
       margin: const EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
@@ -326,13 +297,46 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
                   fontSize: 12),
             ),
           ),
-          Text('Last updated: 2s ago',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.textSecondary)),
-          const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+          Text(
+            _lastUpdatedLabel(),
+            style: AppTextStyles.caption
+                .copyWith(color: AppColors.textSecondary),
+          ),
+          isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(AppColors.primaryOrange),
+                  ),
+                )
+              : GestureDetector(
+                  onTap: _refreshLiveBuses,
+                  child: const Icon(Icons.refresh,
+                      size: 20, color: AppColors.textSecondary),
+                ),
         ],
       ),
     );
+  }
+
+  String _lastUpdatedLabel() {
+    if (_lastUpdated == null) return 'Live';
+    final secs = DateTime.now().difference(_lastUpdated!).inSeconds;
+    if (secs < 5) return 'Updated just now';
+    if (secs < 60) return 'Updated ${secs}s ago';
+    final mins = secs ~/ 60;
+    return 'Updated ${mins}m ago';
+  }
+
+  void _refreshLiveBuses() {
+    if (_selectedRouteId != null) {
+      ref.invalidate(pmpmlLiveBusesProvider(_selectedRouteId!));
+    } else {
+      ref.read(cityLiveBusesProvider.notifier).refresh();
+    }
   }
 
   // ── Route selector ─────────────────────────────────────────────────────────
@@ -345,10 +349,11 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         loading: () => const LinearProgressIndicator(),
         error: (e, _) => _buildErrorCard(e.toString()),
         data: (routes) {
-          return DropdownButtonFormField<String>(
+          return DropdownButtonFormField<String?>(
             value: _selectedRouteId,
+            isExpanded: true,
             decoration: InputDecoration(
-              hintText: 'Select a route…',
+              hintText: 'All live buses near you',
               prefixIcon: const Icon(Icons.route, color: AppColors.primaryOrange),
               filled: true,
               fillColor: Theme.of(context).cardColor,
@@ -359,13 +364,18 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
                 borderSide: BorderSide.none,
               ),
             ),
-            items: routes
-                .map((r) => DropdownMenuItem(
-                      value: r.routeId,
-                      child: Text('${r.routeNumber} — ${r.routeLongName}',
-                          overflow: TextOverflow.ellipsis),
-                    ))
-                .toList(),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('🚍 All live buses near you',
+                    overflow: TextOverflow.ellipsis),
+              ),
+              ...routes.map((r) => DropdownMenuItem<String?>(
+                    value: r.routeId,
+                    child: Text('${r.routeNumber} — ${r.routeLongName}',
+                        overflow: TextOverflow.ellipsis),
+                  )),
+            ],
             onChanged: (val) => setState(() => _selectedRouteId = val),
           );
         },
@@ -474,7 +484,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
                           BorderRadius.circular(AppSpacing.radiusPill),
                     ),
                     child: Text(
-                      '${buses.isNotEmpty ? buses.length : 3}',
+                      '${buses.length}',
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.bold),
                     ),
@@ -491,14 +501,16 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
             const SizedBox(height: AppSpacing.sm),
 
-            // Bus cards
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(left: AppSpacing.md),
-              child: Row(
-                children: buses.isNotEmpty
-                    ? buses
-                        .map((bus) => BusMarkerCard(
+            // Bus cards (or empty / loading state)
+            if (buses.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: AppSpacing.md),
+                child: Row(
+                  children: buses
+                      .map((bus) => GestureDetector(
+                            onTap: () => _showBusDetails(context, bus),
+                            child: BusMarkerCard(
                               routeNumber: bus.routeNumber.isEmpty
                                   ? bus.busId
                                   : bus.routeNumber,
@@ -506,36 +518,124 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
                               routeName: bus.routeNumber,
                               etaMinutes: bus.etaMinutes ?? 0,
                               crowdLevel: _crowdLevel(bus),
-                            ))
-                        .toList()
-                    : const [
-                        BusMarkerCard(
-                            routeNumber: '11',
-                            busType: BusType.nonAc,
-                            routeName: 'Swargate - Katraj',
-                            etaMinutes: 2,
-                            crowdLevel: CrowdLevel.medium),
-                        BusMarkerCard(
-                            routeNumber: '4A',
-                            busType: BusType.ac,
-                            routeName: 'Shivajinagar - Baner',
-                            etaMinutes: 5,
-                            crowdLevel: CrowdLevel.low),
-                        BusMarkerCard(
-                            routeNumber: '155',
-                            busType: BusType.electric,
-                            routeName: 'Pune Stn - Hinjewadi',
-                            etaMinutes: 12,
-                            crowdLevel: CrowdLevel.high),
-                      ],
-              ),
-            ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              )
+            else
+              _buildEmptyBusesState(context, liveBusesAsync.isLoading),
 
             const SizedBox(height: AppSpacing.md),
           ],
         ),
       ),
     );
+  }
+
+  void _showBusDetails(BuildContext context, PmpmlLiveBusModel bus) {
+    final routeLabel =
+        bus.routeNumber.isEmpty ? bus.busId : bus.routeNumber;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _busColor(bus).withOpacity(0.12),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMedium),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.directions_bus,
+                              size: 18, color: _busColor(bus)),
+                          const SizedBox(width: 6),
+                          Text(
+                            routeLabel,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: _busColor(bus)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    BusTypeChip(type: _busType(bus)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _detailRow(Icons.access_time, 'ETA',
+                    bus.etaMinutes != null ? '${bus.etaMinutes} min' : 'N/A'),
+                _detailRow(Icons.speed, 'Speed',
+                    '${bus.speedKmh.toStringAsFixed(0)} km/h'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_outline,
+                          size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 12),
+                      Text('Crowd',
+                          style: AppTextStyles.body.copyWith(
+                              color: AppColors.textSecondary)),
+                      const Spacer(),
+                      CrowdIndicator(level: _crowdLevel(bus)),
+                    ],
+                  ),
+                ),
+                _detailRow(
+                    Icons.update,
+                    'Last seen',
+                    _ago(bus.lastUpdated)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 12),
+          Text(label,
+              style: AppTextStyles.body
+                  .copyWith(color: AppColors.textSecondary)),
+          const Spacer(),
+          Text(value,
+              style: AppTextStyles.body
+                  .copyWith(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  String _ago(DateTime time) {
+    final secs = DateTime.now().difference(time).inSeconds;
+    if (secs < 5) return 'just now';
+    if (secs < 60) return '${secs}s ago';
+    final mins = secs ~/ 60;
+    return '${mins}m ago';
   }
 
   void _showShareOptions(BuildContext context) {
@@ -607,11 +707,46 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     );
   }
 
+  Widget _buildEmptyBusesState(BuildContext context, bool isLoading) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          if (isLoading)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(AppColors.primaryOrange),
+              ),
+            )
+          else
+            const Icon(Icons.directions_bus_outlined,
+                color: AppColors.textSecondary, size: 22),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              isLoading
+                  ? 'Finding live buses near you…'
+                  : 'No live buses right now. Pull to refresh or pick a route.',
+              style: AppTextStyles.body
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Map marker ─────────────────────────────────────────────────────────────
 
   Widget _buildMapMarker(BuildContext context,
       {required String route,
-      required Color color}) {
+      required Color color,
+      double heading = 0}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -628,14 +763,22 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.directions_bus,
-              size: 14, color: Theme.of(context).iconTheme.color),
+          Icon(Icons.directions_bus, size: 14, color: color),
           const SizedBox(width: 4),
           Text(route,
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                   color: Theme.of(context).textTheme.bodyMedium?.color)),
+          if (heading != 0) ...[
+            const SizedBox(width: 2),
+            Transform.rotate(
+              // Heading is clockwise-from-north; the arrow icon points up
+              // (north) by default, so rotate by the heading in radians.
+              angle: heading * math.pi / 180.0,
+              child: Icon(Icons.navigation, size: 11, color: color),
+            ),
+          ],
         ],
       ),
     );
@@ -682,6 +825,36 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   }
 
   // ── Go to my location ────────────────────────────────────────────────────────
+
+  /// Silently resolves the user's location on screen open (only if permission
+  /// is already granted) so the city-wide view can prioritise nearby routes
+  /// and the map can centre on the user. Never prompts — the My Location FAB
+  /// handles explicit permission requests.
+  Future<void> _resolveInitialLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 8),
+      );
+      final latLng = LatLng(position.latitude, position.longitude);
+      if (!mounted) return;
+      setState(() => _userLocation = latLng);
+      ref.read(userLatLngProvider.notifier).state =
+          (lat: latLng.latitude, lng: latLng.longitude);
+      _mapController.move(latLng, 14.0);
+    } catch (_) {
+      // Best-effort only — fall back to the default Pune centre.
+    }
+  }
 
   Future<void> _goToMyLocation(BuildContext context) async {
     setState(() => _isLocating = true);
@@ -743,6 +916,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       final latLng = LatLng(position.latitude, position.longitude);
       if (mounted) {
         setState(() => _userLocation = latLng);
+        // Feed location to the city-wide view so it polls nearby routes.
+        ref.read(userLatLngProvider.notifier).state =
+            (lat: latLng.latitude, lng: latLng.longitude);
         _mapController.move(latLng, 15.0);
       }
     } catch (e) {

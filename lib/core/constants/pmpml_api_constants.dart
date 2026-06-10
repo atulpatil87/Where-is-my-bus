@@ -18,6 +18,15 @@ class PmpmlApiConstants {
   /// POST /verify/{mobile}  — verify OTP → returns tokens
   static String verifyOtp(String mobile) => '/verify/$mobile';
 
+  /// POST /refresh  — exchange a refresh token for a fresh access token.
+  ///
+  /// NOTE: the exact path/payload is not published by Chartr. This is the
+  /// conventional endpoint; if refresh ever returns 404/400 the app falls
+  /// back to OTP re-login, so a wrong guess here degrades gracefully. Confirm
+  /// against the live API (capture the official app's network traffic) before
+  /// relying on silent refresh.
+  static const String refreshToken = '/refresh';
+
   /// POST /api/v1/init-user
   static const String initUser = '/api/v1/init-user';
 
@@ -62,6 +71,7 @@ class PmpmlApiConstants {
   static const String hiveBoxUserPrefs = 'user_prefs';
   static const String keyAccessToken = 'pmpml_access_token';
   static const String keyRefreshToken = 'pmpml_refresh_token';
+  static const String keyTokenExpiry = 'pmpml_token_expiry'; // ISO-8601 instant
   static const String keyMobile = 'pmpml_mobile';
   static const String keyUserId = 'pmpml_user_id';
   static const String keyCombinedDataCache = 'pmpml_combined_data_cache';
@@ -73,4 +83,12 @@ class PmpmlApiConstants {
   static const int livePollIntervalSeconds = 15;
   static const String platform = 'android';
   static const String appVersion = '1.0';
+
+  // ── City-wide live view (all buses near you) ───────────────────────────────
+  /// Max number of routes polled per refresh for the "buses near me" map view.
+  /// Bounds the request fan-out so we never hammer the live-data API.
+  static const int maxLiveRoutes = 30;
+
+  /// Radius (metres) used to pick which routes count as "nearby" the user.
+  static const double nearbyRoutesRadiusMeters = 2500;
 }

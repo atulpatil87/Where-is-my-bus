@@ -65,6 +65,56 @@ class PmpmlAuthDataSource {
     }
   }
 
+  // ── Refresh Token ─────────────────────────────────────────────────────────
+
+  /// Exchanges the stored refresh token for a fresh access token without
+  /// requiring another OTP. Returns the new [PmpmlAuthModel] on success, or
+  /// `null` if there is no refresh token or the backend rejects it (in which
+  /// case the caller should fall back to OTP login).
+  ///
+  /// This is the only legitimate way to obtain a Bearer token without going
+  /// through OTP again — and it still needs one successful OTP login first to
+  /// seed the refresh token.
+  Future<PmpmlAuthModel?> refreshAccessToken() async {
+    final refresh = getStoredRefreshToken();
+    if (refresh == null || refresh.isEmpty) return null;
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        PmpmlApiConstants.refreshToken,
+        data: {
+          'refresh_token': refresh,
+          'mobile': getStoredMobile(),
+        },
+      );
+
+      final data = response.data;
+      if (data == null) return null;
+
+      final auth = PmpmlAuthModel.fromJson(data);
+      if (!auth.isValid) return null;
+
+      // The refresh response may omit the mobile/refresh token; preserve the
+      // existing ones so we don't lose the ability to refresh again.
+      final merged = PmpmlAuthModel(
+        accessToken: auth.accessToken,
+        refreshToken:
+            auth.refreshToken.isNotEmpty ? auth.refreshToken : refresh,
+        mobile: auth.mobile.isNotEmpty ? auth.mobile : (getStoredMobile() ?? ''),
+        userId: auth.userId,
+        deviceId: auth.deviceId,
+        expiresInSeconds: auth.expiresInSeconds,
+      );
+
+      await _persistTokens(merged);
+      return merged;
+    } on DioException {
+      // Wrong endpoint / expired refresh token / network error — let the
+      // caller decide (typically: clear tokens and prompt OTP login).
+      return null;
+    }
+  }
+
   // ── Token Helpers ─────────────────────────────────────────────────────────
 
   Future<void> _persistTokens(PmpmlAuthModel auth) async {
@@ -75,12 +125,37 @@ class PmpmlAuthDataSource {
     if (auth.userId != null) {
       await box.put(PmpmlApiConstants.keyUserId, auth.userId!);
     }
+    if (auth.expiresInSeconds != null && auth.expiresInSeconds! > 0) {
+      final expiry =
+          DateTime.now().add(Duration(seconds: auth.expiresInSeconds!));
+      await box.put(
+          PmpmlApiConstants.keyTokenExpiry, expiry.toIso8601String());
+    } else {
+      await box.delete(PmpmlApiConstants.keyTokenExpiry);
+    }
   }
 
   /// Returns the stored access token, or null if not logged in.
   String? getStoredToken() {
     final box = Hive.box<String>(PmpmlApiConstants.hiveBoxUserPrefs);
     return box.get(PmpmlApiConstants.keyAccessToken);
+  }
+
+  /// Returns the stored refresh token, or null.
+  String? getStoredRefreshToken() {
+    final box = Hive.box<String>(PmpmlApiConstants.hiveBoxUserPrefs);
+    return box.get(PmpmlApiConstants.keyRefreshToken);
+  }
+
+  /// Whether the stored access token is at/near expiry (with a small skew so
+  /// we refresh slightly early). Returns false when no expiry was recorded.
+  bool isTokenExpired({Duration skew = const Duration(seconds: 30)}) {
+    final box = Hive.box<String>(PmpmlApiConstants.hiveBoxUserPrefs);
+    final raw = box.get(PmpmlApiConstants.keyTokenExpiry);
+    if (raw == null) return false;
+    final expiry = DateTime.tryParse(raw);
+    if (expiry == null) return false;
+    return DateTime.now().add(skew).isAfter(expiry);
   }
 
   /// Returns the stored mobile number, or null.
@@ -94,6 +169,7 @@ class PmpmlAuthDataSource {
     final box = Hive.box<String>(PmpmlApiConstants.hiveBoxUserPrefs);
     await box.delete(PmpmlApiConstants.keyAccessToken);
     await box.delete(PmpmlApiConstants.keyRefreshToken);
+    await box.delete(PmpmlApiConstants.keyTokenExpiry);
     await box.delete(PmpmlApiConstants.keyMobile);
     await box.delete(PmpmlApiConstants.keyUserId);
   }

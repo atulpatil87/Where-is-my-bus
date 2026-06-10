@@ -20,6 +20,48 @@ class PmpmlLiveDataSource {
     }
   }
 
+  /// Fetches live buses across many [routeIds] concurrently and merges the
+  /// results into a single deduplicated list.
+  ///
+  /// The PMPML/Chartr backend only exposes a per-route live endpoint, so to
+  /// mirror the official app's "all live buses near you" view we fan out a
+  /// bounded number of requests at a time ([concurrency]). Individual route
+  /// failures are ignored so one bad route never blanks the whole map.
+  Future<List<PmpmlLiveBusModel>> getBusesOnRoutes(
+    List<String> routeIds, {
+    int concurrency = 6,
+  }) async {
+    final ids = routeIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return [];
+
+    final merged = <String, PmpmlLiveBusModel>{};
+
+    for (var i = 0; i < ids.length; i += concurrency) {
+      final batch = ids.skip(i).take(concurrency);
+      final results = await Future.wait(
+        batch.map((id) async {
+          try {
+            return await getBusesOnRoute(id);
+          } catch (_) {
+            return const <PmpmlLiveBusModel>[];
+          }
+        }),
+      );
+      for (final buses in results) {
+        for (final bus in buses) {
+          // Dedupe by bus id; keep the freshest report.
+          final existing = merged[bus.busId];
+          if (existing == null ||
+              bus.lastUpdated.isAfter(existing.lastUpdated)) {
+            merged[bus.busId] = bus;
+          }
+        }
+      }
+    }
+
+    return merged.values.toList();
+  }
+
   Future<bool> getApiStatus() async {
     try {
       final response = await _dio.get<dynamic>(PmpmlApiConstants.liveStatus);

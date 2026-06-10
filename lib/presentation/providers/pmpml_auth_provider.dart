@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/pmpml/pmpml_auth_model.dart';
 import 'pmpml_providers_setup.dart';
@@ -48,11 +50,27 @@ class PmpmlAuthNotifier extends StateNotifier<PmpmlAuthState> {
 
   void _checkStoredToken() {
     final repo = _ref.read(pmpmlRepositoryProvider);
-    if (repo.isAuthenticated) {
-      state = PmpmlAuthState(
-        step: PmpmlAuthStep.authenticated,
-        mobile: repo.storedMobile,
-      );
+    if (!repo.isAuthenticated) return;
+
+    // Optimistically treat the stored session as authenticated…
+    state = PmpmlAuthState(
+      step: PmpmlAuthStep.authenticated,
+      mobile: repo.storedMobile,
+    );
+
+    // …but if the access token has expired, silently mint a fresh one from
+    // the refresh token (no OTP). Only drop to logged-out if that fails.
+    if (repo.isTokenExpired) {
+      unawaited(_refreshExpiredSession());
+    }
+  }
+
+  Future<void> _refreshExpiredSession() async {
+    final repo = _ref.read(pmpmlRepositoryProvider);
+    final ok = await repo.refreshSession();
+    if (!ok) {
+      await repo.logout();
+      state = const PmpmlAuthState();
     }
   }
 

@@ -41,6 +41,15 @@ class PmpmlRepositoryImpl implements IPmpmlRepository {
   String? get storedMobile => _auth.getStoredMobile();
 
   @override
+  bool get isTokenExpired => _auth.isTokenExpired();
+
+  @override
+  Future<bool> refreshSession() async {
+    final auth = await _auth.refreshAccessToken();
+    return auth != null;
+  }
+
+  @override
   Future<Either<Failure, bool>> sendOtp(String mobile) async {
     try {
       final result = await _auth.sendOtp(mobile);
@@ -117,6 +126,17 @@ class PmpmlRepositoryImpl implements IPmpmlRepository {
       String routeId) async {
     try {
       final buses = await _live.getBusesOnRoute(routeId);
+      return Right(buses);
+    } on AppException catch (e) {
+      return Left(_mapException(e));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<PmpmlLiveBusModel>>> getLiveBusesForRoutes(
+      List<String> routeIds) async {
+    try {
+      final buses = await _live.getBusesOnRoutes(routeIds);
       return Right(buses);
     } on AppException catch (e) {
       return Left(_mapException(e));
