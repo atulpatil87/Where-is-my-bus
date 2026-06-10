@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "brainsync": {
+      "command": "node",
+      "args": [
+        "c:\\Users\\chat360it1\\.antigravity\\extensions\\dawoodahmad.brainsync-3.0.12-universal\\dist\\mcp-server.js"
+      ],
+      "type": "stdio",
+      "env": {
+        "BRAINSYNC_ENV_FILE": "C:\\Users\\chat360it1\\.bsync_core\\where-is-my-bus\\mcp-secret-env.json"
+      }
+    }
+  }
+}

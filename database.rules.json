@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "live_buses": {
+      ".read": true,
+      "$cityId": {
+        ".read": true,
+        "$busId": {
+          ".write": "auth !== null",
+          ".validate": "newData.hasChildren(['lat', 'lng', 'routeId', 'lastUpdated'])"
+        }
+      }
+    },
+    "tower_fingerprints": {
+      ".read": true,
+      "$cityId": {
+        ".read": true,
+        "$cellKey": {
+          ".write": "auth !== null",
+          ".validate": "newData.hasChildren(['lat', 'lng', 'sampleCount', 'lastUpdated'])"
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
