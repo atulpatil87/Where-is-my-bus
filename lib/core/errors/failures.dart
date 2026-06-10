@@ -86,3 +86,22 @@ class OfflineFailure extends Failure {
     super.message = 'You are offline. Showing saved data.',
   });
 }
+
+// ─── Bluetooth ─────────────────────────────────────────────
+class BluetoothFailure extends Failure {
+  const BluetoothFailure({
+    super.message = 'Bluetooth unavailable or permission denied.',
+  });
+}
+
+class BluetoothOffFailure extends Failure {
+  const BluetoothOffFailure({
+    super.message = 'Bluetooth is turned off. Enable it to share location with nearby commuters.',
+  });
+}
+
+class NoPeersFailure extends Failure {
+  const NoPeersFailure({
+    super.message = 'No nearby commuters found via Bluetooth.',
+  });
+}

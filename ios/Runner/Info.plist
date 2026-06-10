@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Bluetooth LE — peer-to-peer location mesh -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>BusIndia uses Bluetooth to share your location with nearby commuters and receive their locations when GPS is unavailable.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>BusIndia uses Bluetooth to broadcast your location so nearby commuters can use it as a GPS fallback.</string>
+
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

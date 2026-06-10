@@ -7,9 +7,16 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../core/network/network_info.dart';
 import '../../core/services/ai_service.dart';
+import '../../core/services/bluetooth_location_service.dart';
 import '../../core/services/cell_tower_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../data/repositories/bluetooth_location_repository_impl.dart';
+import '../../domain/repositories/i_bluetooth_location_repository.dart';
+import '../../domain/usecases/bluetooth/get_bluetooth_derived_location_usecase.dart';
+import '../../domain/usecases/bluetooth/get_effective_location_usecase.dart';
+import '../../domain/usecases/bluetooth/start_bluetooth_location_usecase.dart';
+import '../../domain/usecases/bluetooth/stop_bluetooth_location_usecase.dart';
 import '../../data/datasources/local/local_datasources.dart';
 import '../../data/datasources/remote/bus_remote_datasource.dart';
 import '../../data/datasources/remote/city_remote_datasource.dart';
@@ -51,6 +58,52 @@ final networkInfoProvider = Provider<INetworkInfo>((ref) {
 
 final locationServiceProvider = Provider<LocationService>((ref) {
   return LocationService();
+});
+
+final bluetoothLocationServiceProvider =
+    Provider<BluetoothLocationService>((ref) {
+  return BluetoothLocationService();
+});
+
+// ─── Bluetooth Location Repository ───────────────────────────────────────────
+
+final bluetoothLocationRepositoryProvider =
+    Provider<IBluetoothLocationRepository>((ref) {
+  return BluetoothLocationRepositoryImpl(
+    ref.read(bluetoothLocationServiceProvider),
+  );
+});
+
+// ─── Bluetooth Use Cases ─────────────────────────────────────────────────────
+
+final startBluetoothLocationUseCaseProvider =
+    Provider<StartBluetoothLocationUseCase>((ref) {
+  return StartBluetoothLocationUseCase(
+    ref.read(bluetoothLocationRepositoryProvider),
+    ref.read(locationServiceProvider),
+  );
+});
+
+final stopBluetoothLocationUseCaseProvider =
+    Provider<StopBluetoothLocationUseCase>((ref) {
+  return StopBluetoothLocationUseCase(
+    ref.read(bluetoothLocationRepositoryProvider),
+  );
+});
+
+final getBluetoothDerivedLocationUseCaseProvider =
+    Provider<GetBluetoothDerivedLocationUseCase>((ref) {
+  return GetBluetoothDerivedLocationUseCase(
+    ref.read(bluetoothLocationRepositoryProvider),
+  );
+});
+
+final getEffectiveLocationUseCaseProvider =
+    Provider<GetEffectiveLocationUseCase>((ref) {
+  return GetEffectiveLocationUseCase(
+    ref.read(locationServiceProvider),
+    ref.read(bluetoothLocationRepositoryProvider),
+  );
 });
 
 final notificationServiceProvider = Provider<NotificationService>((ref) {
