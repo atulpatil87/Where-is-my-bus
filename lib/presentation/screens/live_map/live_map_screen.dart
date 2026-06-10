@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:busindia/core/theme/app_colors.dart';
 import 'package:busindia/core/theme/app_spacing.dart';
 import 'package:busindia/core/theme/app_text_styles.dart';
+import 'package:busindia/domain/entities/location_fix.dart';
+import 'package:busindia/presentation/providers/bluetooth_location_provider.dart';
 import 'package:busindia/presentation/widgets/bus_marker_card.dart';
 import 'package:busindia/presentation/widgets/bus_type_chip.dart';
 import 'package:busindia/presentation/widgets/crowd_indicator.dart';
 import 'package:busindia/presentation/screens/tower_tracking/tower_tracking_screen.dart';
 
-class LiveMapScreen extends StatefulWidget {
+class LiveMapScreen extends ConsumerStatefulWidget {
   const LiveMapScreen({super.key});
 
   @override
-  State<LiveMapScreen> createState() => _LiveMapScreenState();
+  ConsumerState<LiveMapScreen> createState() => _LiveMapScreenState();
 }
 
-class _LiveMapScreenState extends State<LiveMapScreen> {
+class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   final List<String> _filters = ["All Routes", "AC Only", "Non-AC", "Electric", "On Time", "Crowded"];
   String _selectedFilter = "All Routes";
 
@@ -42,6 +45,8 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveLocation = ref.watch(effectiveLocationProvider);
+
     return Stack(
       children: [
         // Map Placeholder with zoom/pan support
@@ -61,11 +66,18 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
                 _buildMapMarker(context, top: 250, left: 180, route: "4A", color: AppColors.busDelayed),
                 _buildMapMarker(context, top: 400, left: 100, route: "155", color: AppColors.busCrowded),
                 _buildMapMarker(context, top: 300, left: 300, route: "24", color: AppColors.busOnTime),
+
+                // "You are here" marker, resolved from GPS or a nearby
+                // Bluetooth peer when GPS is off.
+                effectiveLocation.maybeWhen(
+                  data: (fix) => _buildSelfMarker(context, fix: fix),
+                  orElse: () => const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
         ),
-        
+
         // Floating Top Elements
         SafeArea(
           child: Column(
@@ -97,7 +109,18 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
                   ],
                 ),
               ),
-              
+
+              // Location source indicator (GPS vs Bluetooth fallback)
+              effectiveLocation.maybeWhen(
+                data: (fix) => fix.isFromBluetooth
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: _LocationSourceBanner(fix: fix),
+                      )
+                    : const SizedBox.shrink(),
+                orElse: () => const SizedBox.shrink(),
+              ),
+
               // Filter Chips
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -258,6 +281,57 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
     );
   }
 
+  Widget _buildSelfMarker(BuildContext context, {required LocationFix fix}) {
+    final color = fix.isFromBluetooth ? AppColors.primaryOrange : AppColors.accentBlue;
+    return Align(
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.25),
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Center(
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.1), offset: const Offset(0, 1), blurRadius: 2)
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  fix.isFromBluetooth ? Icons.bluetooth_connected : Icons.gps_fixed,
+                  size: 10,
+                  color: color,
+                ),
+                const SizedBox(width: 4),
+                const Text("You", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMapMarker(BuildContext context, {required double top, required double left, required String route, required Color color}) {
     // Scale marker content inversely to zoom so markers stay readable but
     // also provide a subtle size cue — clamped to avoid extremes.
@@ -293,6 +367,39 @@ class _LiveMapScreenState extends State<LiveMapScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown over the map when the resolved position came from a nearby
+/// Bluetooth peer instead of GPS.
+class _LocationSourceBanner extends StatelessWidget {
+  final LocationFix fix;
+  const _LocationSourceBanner({required this.fix});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.12),
+        border: Border.all(color: Colors.amber.shade600, width: 1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMedium),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bluetooth_connected, color: Colors.amber, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'GPS off — your position is approximated from a nearby '
+              'commuter\'s location (~${fix.accuracy.round()} m accuracy).',
+              style: const TextStyle(fontSize: 11, color: Colors.amber),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -6,14 +6,14 @@ class StopNearbyCard extends StatelessWidget {
   final String stopName;
   final String distanceStr;
   final List<String> routes;
-  final int nextBusMinute;
+  final int? nextBusMinute;
 
   const StopNearbyCard({
     super.key,
     required this.stopName,
     required this.distanceStr,
     required this.routes,
-    required this.nextBusMinute,
+    this.nextBusMinute,
   });
 
   @override
@@ -72,7 +72,10 @@ class StopNearbyCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text("$nextBusMinute min", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.busOnTime)),
+              Text(
+                nextBusMinute != null ? "$nextBusMinute min" : "—",
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.busOnTime),
+              ),
               const Text("Next bus", style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               const SizedBox(height: AppSpacing.sm),
               const Icon(Icons.navigation, color: AppColors.accentBlue, size: 20),

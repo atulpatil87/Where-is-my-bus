@@ -15,22 +15,31 @@ class GetNearbyStopsUseCase {
   Future<Either<Failure, List<Stop>>> call({
     required String cityId,
     double radiusMeters = 500,
+    double? lat,
+    double? lng,
   }) async {
     try {
-      final position = await _locationService.getCurrentLocation();
-      final lat = position.latitude;
-      final lng = position.longitude;
+      double resolvedLat;
+      double resolvedLng;
+      if (lat != null && lng != null) {
+        resolvedLat = lat;
+        resolvedLng = lng;
+      } else {
+        final position = await _locationService.getCurrentLocation();
+        resolvedLat = position.latitude;
+        resolvedLng = position.longitude;
+      }
 
       final result = await _stopRepository.getNearbyStops(
         cityId: cityId,
-        lat: lat,
-        lng: lng,
+        lat: resolvedLat,
+        lng: resolvedLng,
         radiusMeters: radiusMeters,
       );
 
       return result.map((stops) {
         final enriched = stops.map((stop) {
-          final dist = DistanceUtils.haversineMeters(lat, lng, stop.lat, stop.lng);
+          final dist = DistanceUtils.haversineMeters(resolvedLat, resolvedLng, stop.lat, stop.lng);
           final walk = _locationService.getWalkingMins(dist);
           return stop.copyWith(distanceMeters: dist, walkingMins: walk);
         }).toList();

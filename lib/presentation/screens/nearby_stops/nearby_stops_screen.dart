@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:busindia/core/theme/app_colors.dart';
 import 'package:busindia/core/theme/app_spacing.dart';
 import 'package:busindia/core/theme/app_text_styles.dart';
+import 'package:busindia/domain/entities/stop.dart';
+import 'package:busindia/presentation/providers/bluetooth_location_provider.dart';
+import 'package:busindia/presentation/providers/nearby_stops_provider.dart';
 import 'package:busindia/presentation/widgets/stop_nearby_card.dart';
 
-class NearbyStopsScreen extends StatelessWidget {
+class NearbyStopsScreen extends ConsumerWidget {
   const NearbyStopsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stopsAsync = ref.watch(nearbyStopsProvider);
+    final locationAsync = ref.watch(effectiveLocationProvider);
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -77,44 +84,43 @@ class NearbyStopsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      locationAsync.maybeWhen(
+                        data: (fix) => fix.isFromBluetooth
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                                child: _BluetoothLocationNotice(accuracyMeters: fix.accuracy),
+                              )
+                            : const SizedBox.shrink(),
+                        orElse: () => const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
-                    children: const [
-                      StopNearbyCard(
-                        stopName: "Shivajinagar Bus Stand",
-                        distanceStr: "200m · 2 min walk 🚶",
-                        routes: ["11", "4A", "155", "16LE", "+5 more"],
-                        nextBusMinute: 2,
-                      ),
-                      StopNearbyCard(
-                        stopName: "Simla Office",
-                        distanceStr: "350m · 4 min walk 🚶",
-                        routes: ["24", "11", "54"],
-                        nextBusMinute: 5,
-                      ),
-                      StopNearbyCard(
-                        stopName: "Wakdewadi",
-                        distanceStr: "480m · 5 min walk 🚶",
-                        routes: ["4A", "155", "305"],
-                        nextBusMinute: 8,
-                      ),
-                      StopNearbyCard(
-                        stopName: "COEP Hostel",
-                        distanceStr: "620m · 7 min walk 🚶",
-                        routes: ["11", "305"],
-                        nextBusMinute: 11,
-                      ),
-                      StopNearbyCard(
-                        stopName: "Pune Station",
-                        distanceStr: "1.1km · 12 min walk 🚶",
-                        routes: ["155", "24", "16LE", "+12 more"],
-                        nextBusMinute: 1,
-                      ),
-                    ],
+                  child: stopsAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => _ErrorState(
+                      message: e.toString().replaceFirst('Exception: ', ''),
+                      onRetry: () => ref.invalidate(nearbyStopsProvider),
+                    ),
+                    data: (stops) {
+                      if (stops.isEmpty) {
+                        return const _EmptyStopsState();
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+                        itemCount: stops.length,
+                        itemBuilder: (context, index) {
+                          final stop = stops[index];
+                          return StopNearbyCard(
+                            stopName: stop.name,
+                            distanceStr: _formatDistance(stop),
+                            routes: stop.routeIds,
+                            nextBusMinute: stop.nextBus?.etaMins,
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ],
@@ -123,6 +129,17 @@ class NearbyStopsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDistance(Stop stop) {
+    final meters = stop.distanceMeters ?? 0;
+    final distanceLabel = meters >= 1000
+        ? '${(meters / 1000).toStringAsFixed(1)}km'
+        : '${meters.round()}m';
+    final walkingMins = stop.walkingMins;
+    return walkingMins != null
+        ? '$distanceLabel · $walkingMins min walk 🚶'
+        : distanceLabel;
   }
 
   Widget _buildMapStopDot(BuildContext context, {required double top, required double left}) {
@@ -156,6 +173,92 @@ class NearbyStopsScreen extends StatelessWidget {
           color: isSelected ? Colors.white : AppColors.textPrimary,
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when stops were resolved using a nearby Bluetooth peer's location
+/// instead of GPS.
+class _BluetoothLocationNotice extends StatelessWidget {
+  final double accuracyMeters;
+  const _BluetoothLocationNotice({required this.accuracyMeters});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.12),
+        border: Border.all(color: Colors.amber.shade600, width: 1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMedium),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bluetooth_connected, color: Colors.amber, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'GPS off — showing stops near a nearby commuter\'s location '
+              '(~${accuracyMeters.round()} m accuracy).',
+              style: const TextStyle(fontSize: 11, color: Colors.amber),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyStopsState extends StatelessWidget {
+  const _EmptyStopsState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.directions_bus_filled_outlined,
+                size: 48, color: AppColors.textSecondary.withOpacity(0.4)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'No bus stops found nearby.',
+              style: TextStyle(color: AppColors.textSecondary.withOpacity(0.7)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_off, size: 48, color: AppColors.accentRed),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.accentRed, fontSize: 13),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
       ),
     );
