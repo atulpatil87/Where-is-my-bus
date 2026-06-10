@@ -98,13 +98,13 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
         ),
 
         // ── Bottom sliding panel ─────────────────────────────────────────────
-        DraggableScrollableSheet(
-          initialChildSize: 0.28,
-          minChildSize: 0.12,
-          maxChildSize: 0.65,
-          builder: (ctx, scrollCtrl) =>
-              _buildBottomPanel(ctx, scrollCtrl, filteredBuses, liveBusesAsync),
-        ),
+        // DraggableScrollableSheet(
+        //   initialChildSize: 0.28,
+        //   minChildSize: 0.12,
+        //   maxChildSize: 0.65,
+        //   builder: (ctx, scrollCtrl) =>
+        //       _buildBottomPanel(ctx, scrollCtrl, filteredBuses, liveBusesAsync),
+        // ),
 
         // ── My Location FAB ──────────────────────────────────────────────────
         Positioned(
