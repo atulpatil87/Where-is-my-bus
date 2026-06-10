@@ -290,7 +290,7 @@ class BluetoothPeerTile extends StatelessWidget {
             ),
           ),
           Text(
-            '${rssi} dBm',
+            '$rssi dBm',
             style: TextStyle(
               fontSize: 10,
               color:

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../domain/entities/bluetooth_peer.dart';
+import '../../../domain/entities/location_fix.dart';
 import '../../providers/bluetooth_location_provider.dart';
 import '../../widgets/bluetooth_location_banner.dart';
 
@@ -16,6 +17,7 @@ class BluetoothPeersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mesh = ref.watch(bluetoothMeshProvider);
     final fallback = ref.watch(bluetoothFallbackPeerProvider);
+    final effectiveLocation = ref.watch(effectiveLocationProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -32,6 +34,9 @@ class BluetoothPeersScreen extends ConsumerWidget {
 
           // Toggle banner
           const BluetoothLocationBanner(),
+
+          // Resolved location (GPS or Bluetooth-derived)
+          _EffectiveLocationCard(asyncFix: effectiveLocation),
 
           // GPS fallback notice
           if (fallback != null) _FallbackNotice(peer: fallback),
@@ -153,6 +158,91 @@ class _HowItWorksCard extends StatelessWidget {
         'When your GPS is off, the closest peer\'s location is used as a fallback so the app still knows roughly where you are.'),
     ('🔒', 'No pairing, no internet, no server — purely local mesh.'),
   ];
+}
+
+/// Shows the app's resolved current location and whether it came from
+/// GPS or from a nearby Bluetooth peer.
+class _EffectiveLocationCard extends StatelessWidget {
+  final AsyncValue<LocationFix> asyncFix;
+  const _EffectiveLocationCard({required this.asyncFix});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMedium),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: asyncFix.when(
+        loading: () => const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text('Resolving current location…',
+                style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        error: (e, _) => Row(
+          children: [
+            const Icon(Icons.location_off, size: 18, color: AppColors.accentRed),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Location unavailable: ${e.toString().replaceFirst('Exception: ', '')}',
+                style: const TextStyle(fontSize: 11, color: AppColors.accentRed),
+              ),
+            ),
+          ],
+        ),
+        data: (fix) => Row(
+          children: [
+            Icon(
+              fix.isFromBluetooth ? Icons.bluetooth_connected : Icons.gps_fixed,
+              size: 18,
+              color: fix.isFromBluetooth
+                  ? AppColors.primaryOrange
+                  : Colors.green,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fix.isFromBluetooth
+                        ? 'Location from nearby Bluetooth peer'
+                        : 'Location from GPS',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '${fix.lat.toStringAsFixed(5)}, ${fix.lng.toStringAsFixed(5)}'
+                    ' · ±${fix.accuracy.round()} m',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color
+                          ?.withOpacity(0.65),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FallbackNotice extends StatelessWidget {

@@ -13,6 +13,7 @@ import '../../core/services/notification_service.dart';
 import '../../data/repositories/bluetooth_location_repository_impl.dart';
 import '../../domain/repositories/i_bluetooth_location_repository.dart';
 import '../../domain/usecases/bluetooth/get_bluetooth_derived_location_usecase.dart';
+import '../../domain/usecases/bluetooth/get_effective_location_usecase.dart';
 import '../../domain/usecases/bluetooth/start_bluetooth_location_usecase.dart';
 import '../../domain/usecases/bluetooth/stop_bluetooth_location_usecase.dart';
 import '../../data/datasources/local/local_datasources.dart';
@@ -86,6 +87,14 @@ final stopBluetoothLocationUseCaseProvider =
 final getBluetoothDerivedLocationUseCaseProvider =
     Provider<GetBluetoothDerivedLocationUseCase>((ref) {
   return GetBluetoothDerivedLocationUseCase(
+    ref.read(bluetoothLocationRepositoryProvider),
+  );
+});
+
+final getEffectiveLocationUseCaseProvider =
+    Provider<GetEffectiveLocationUseCase>((ref) {
+  return GetEffectiveLocationUseCase(
+    ref.read(locationServiceProvider),
     ref.read(bluetoothLocationRepositoryProvider),
   );
 });

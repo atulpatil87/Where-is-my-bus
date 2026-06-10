@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/bluetooth_peer.dart';
+import '../../domain/entities/location_fix.dart';
 import '../../domain/usecases/bluetooth/start_bluetooth_location_usecase.dart';
 import '../../domain/usecases/bluetooth/stop_bluetooth_location_usecase.dart';
 import '../../domain/usecases/bluetooth/get_bluetooth_derived_location_usecase.dart';
@@ -71,7 +72,7 @@ class BluetoothMeshNotifier extends StateNotifier<BluetoothMeshState> {
       ),
       (_) {
         state = state.copyWith(status: BluetoothMeshStatus.active);
-        _subscribeTopeers();
+        _subscribeToPeers();
         // Refresh advertised location every 20 seconds.
         _scheduleLocationRefresh();
       },
@@ -89,7 +90,7 @@ class BluetoothMeshNotifier extends StateNotifier<BluetoothMeshState> {
   /// Returns best peer location for GPS fallback, or null.
   BluetoothPeer? get bestFallbackPeer => _getDerived.call().fold((_) => null, (p) => p);
 
-  void _subscribeTopeers() {
+  void _subscribeToPeers() {
     final repo = _ref.read(bluetoothLocationRepositoryProvider);
     _peerSub = repo.peersStream.listen((peers) {
       state = state.copyWith(peers: peers);
@@ -150,5 +151,20 @@ final bluetoothFallbackPeerProvider = Provider<BluetoothPeer?>((ref) {
   if (!state.isActive || state.peers.isEmpty) return null;
   return state.peers.reduce(
     (a, b) => a.estimatedDistanceMeters <= b.estimatedDistanceMeters ? a : b,
+  );
+});
+
+/// Resolves the device's current location: GPS first, falling back to the
+/// closest Bluetooth peer when GPS is unavailable. Re-evaluates whenever
+/// the peer list changes so the UI updates as soon as a peer comes into range.
+final effectiveLocationProvider = FutureProvider<LocationFix>((ref) async {
+  // Re-run whenever the BT mesh discovers/loses peers.
+  ref.watch(bluetoothMeshProvider.select((s) => s.peers));
+
+  final useCase = ref.read(getEffectiveLocationUseCaseProvider);
+  final result = await useCase.call();
+  return result.fold(
+    (failure) => throw Exception(failure.message),
+    (fix) => fix,
   );
 });

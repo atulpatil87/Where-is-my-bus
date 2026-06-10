@@ -31,7 +31,6 @@ class BluetoothLocationService {
   final Map<String, BluetoothPeer> _peers = {};
 
   StreamSubscription<DiscoveredEventArgs>? _discoverySubscription;
-  StreamSubscription<BluetoothLowEnergyState>? _stateSubscription;
 
   bool _isScanning = false;
   bool _isAdvertising = false;
@@ -59,8 +58,9 @@ class BluetoothLocationService {
     required double speedKmh,
   }) async {
     try {
-      final state = await _peripheral.setUp();
-      if (state != BluetoothLowEnergyState.poweredOn) return false;
+      final authorized = await _peripheral.authorize();
+      if (!authorized) return false;
+      if (_peripheral.state != BluetoothLowEnergyState.poweredOn) return false;
 
       if (_isAdvertising) await stopAdvertising();
 
@@ -68,10 +68,12 @@ class BluetoothLocationService {
         Advertisement(
           name: 'BusIndia',
           serviceUUIDs: [_serviceUUID],
-          manufacturerSpecificData: ManufacturerSpecificData(
-            id: _manufacturerId,
-            data: _encode(lat: lat, lng: lng, accuracy: accuracy, speedKmh: speedKmh),
-          ),
+          manufacturerSpecificData: [
+            ManufacturerSpecificData(
+              id: _manufacturerId,
+              data: _encode(lat: lat, lng: lng, accuracy: accuracy, speedKmh: speedKmh),
+            ),
+          ],
         ),
       );
       _isAdvertising = true;
@@ -113,8 +115,9 @@ class BluetoothLocationService {
   /// Returns `true` if scanning started successfully.
   Future<bool> startScanning() async {
     try {
-      final state = await _central.setUp();
-      if (state != BluetoothLowEnergyState.poweredOn) return false;
+      final authorized = await _central.authorize();
+      if (!authorized) return false;
+      if (_central.state != BluetoothLowEnergyState.poweredOn) return false;
 
       if (_isScanning) await stopScanning();
 
@@ -153,8 +156,14 @@ class BluetoothLocationService {
   // ── Internal ─────────────────────────────────────────────────────────────────
 
   void _handleDiscovery(DiscoveredEventArgs event) {
-    final msd = event.advertisement.manufacturerSpecificData;
-    if (msd == null || msd.id != _manufacturerId) return;
+    ManufacturerSpecificData? msd;
+    for (final d in event.advertisement.manufacturerSpecificData) {
+      if (d.id == _manufacturerId) {
+        msd = d;
+        break;
+      }
+    }
+    if (msd == null) return;
 
     final peer = _decode(
       deviceId: event.peripheral.uuid.toString(),
@@ -176,13 +185,13 @@ class BluetoothLocationService {
     required double speedKmh,
   }) {
     final buf = ByteData(16);
-    buf.setFloat32(0, lat.clamp(-90.0, 90.0), Endian.big);
-    buf.setFloat32(4, lng.clamp(-180.0, 180.0), Endian.big);
-    buf.setUint16(8, (accuracy * 10).round().clamp(0, 65535), Endian.big);
-    buf.setUint16(10, (speedKmh * 10).round().clamp(0, 65535), Endian.big);
+    buf.setFloat32(0, lat.clamp(-90.0, 90.0).toDouble(), Endian.big);
+    buf.setFloat32(4, lng.clamp(-180.0, 180.0).toDouble(), Endian.big);
+    buf.setUint16(8, (accuracy * 10).round().clamp(0, 65535).toInt(), Endian.big);
+    buf.setUint16(10, (speedKmh * 10).round().clamp(0, 65535).toInt(), Endian.big);
     buf.setUint32(
       12,
-      (DateTime.now().millisecondsSinceEpoch ~/ 1000).clamp(0, 0xFFFFFFFF),
+      (DateTime.now().millisecondsSinceEpoch ~/ 1000).clamp(0, 0xFFFFFFFF).toInt(),
       Endian.big,
     );
     return buf.buffer.asUint8List();
@@ -228,7 +237,6 @@ class BluetoothLocationService {
   Future<void> dispose() async {
     await stopAdvertising();
     await stopScanning();
-    await _stateSubscription?.cancel();
     await _peersController.close();
   }
 }
