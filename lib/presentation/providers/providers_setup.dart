@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../core/network/network_info.dart';
 import '../../core/services/ai_service.dart';
 import '../../core/services/bluetooth_location_service.dart';
+import '../../core/services/cell_tower_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../data/repositories/bluetooth_location_repository_impl.dart';
@@ -21,19 +22,25 @@ import '../../data/datasources/remote/bus_remote_datasource.dart';
 import '../../data/datasources/remote/city_remote_datasource.dart';
 import '../../data/datasources/remote/route_remote_datasource.dart';
 import '../../data/datasources/remote/stop_remote_datasource.dart';
+import '../../data/datasources/remote/tower_remote_datasource.dart';
 import '../../data/datasources/remote/user_remote_datasource.dart';
 import '../../data/repositories/bus_repository_impl.dart';
 import '../../data/repositories/city_repository_impl.dart';
 import '../../data/repositories/route_repository_impl.dart';
 import '../../data/repositories/stop_repository_impl.dart';
+import '../../data/repositories/tower_repository_impl.dart';
 import '../../data/repositories/user_repository_impl.dart';
 import '../../domain/repositories/i_bus_repository.dart';
 import '../../domain/repositories/i_city_repository.dart';
 import '../../domain/repositories/i_route_repository.dart';
 import '../../domain/repositories/i_stop_repository.dart';
+import '../../domain/repositories/i_tower_repository.dart';
 import '../../domain/repositories/i_user_repository.dart';
+import '../../domain/usecases/bus/calibrate_tower_usecase.dart';
 import '../../domain/usecases/bus/get_live_buses_usecase.dart';
+import '../../domain/usecases/bus/resolve_tower_fix_usecase.dart';
 import '../../domain/usecases/bus/share_bus_location_usecase.dart';
+import '../../domain/usecases/bus/share_bus_location_via_tower_usecase.dart';
 import '../../domain/usecases/city/detect_city_usecase.dart';
 import '../../domain/usecases/city/get_cities_usecase.dart';
 import '../../domain/usecases/route/find_route_usecase.dart';
@@ -103,6 +110,10 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService();
 });
 
+final cellTowerServiceProvider = Provider<CellTowerService>((ref) {
+  return CellTowerService();
+});
+
 final aiServiceProvider = Provider<AIService>((ref) {
   return AIService();
 });
@@ -149,6 +160,10 @@ final stopRemoteDSProvider = Provider<StopRemoteDataSource>((ref) {
   return StopRemoteDataSource(ref.read(firestoreProvider));
 });
 
+final towerRemoteDSProvider = Provider<TowerRemoteDataSource>((ref) {
+  return TowerRemoteDataSource(ref.read(firebaseDatabaseProvider));
+});
+
 final routeRemoteDSProvider = Provider<RouteRemoteDataSource>((ref) {
   return RouteRemoteDataSource(ref.read(firestoreProvider));
 });
@@ -179,6 +194,10 @@ final busRepositoryProvider = Provider<IBusRepository>((ref) {
 
 final stopRepositoryProvider = Provider<IStopRepository>((ref) {
   return StopRepositoryImpl(ref.read(stopRemoteDSProvider));
+});
+
+final towerRepositoryProvider = Provider<ITowerRepository>((ref) {
+  return TowerRepositoryImpl(ref.read(towerRemoteDSProvider));
 });
 
 final routeRepositoryProvider = Provider<IRouteRepository>((ref) {
@@ -221,6 +240,31 @@ final shareBusLocationUseCaseProvider =
     ref.read(busRepositoryProvider),
     ref.read(userRepositoryProvider),
     ref.read(locationServiceProvider),
+  );
+});
+
+final resolveTowerFixUseCaseProvider = Provider<ResolveTowerFixUseCase>((ref) {
+  return ResolveTowerFixUseCase(
+    ref.read(cellTowerServiceProvider),
+    ref.read(towerRepositoryProvider),
+  );
+});
+
+final shareBusLocationViaTowerUseCaseProvider =
+    Provider<ShareBusLocationViaTowerUseCase>((ref) {
+  return ShareBusLocationViaTowerUseCase(
+    ref.read(resolveTowerFixUseCaseProvider),
+    ref.read(towerRepositoryProvider),
+    ref.read(userRepositoryProvider),
+  );
+});
+
+final calibrateTowerUseCaseProvider = Provider<CalibrateTowerUseCase>((ref) {
+  return CalibrateTowerUseCase(
+    ref.read(cellTowerServiceProvider),
+    ref.read(locationServiceProvider),
+    ref.read(stopRepositoryProvider),
+    ref.read(towerRepositoryProvider),
   );
 });
 

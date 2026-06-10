@@ -20,6 +20,14 @@
     <!-- Declare that BLE is used but not required to install the app -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Internet for Firebase realtime sync -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Cell-tower based positioning (no-GPS tracking, à la "Where is my Train").
+         getAllCellInfo() requires fine location on Android 10+ and phone state. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <application
         android:label="busindia"
         android:name="${applicationName}"
